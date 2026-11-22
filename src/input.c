@@ -417,9 +417,28 @@ void _glfwInputJoystick(_GLFWjoystick* js, int event)
     assert(event == GLFW_CONNECTED || event == GLFW_DISCONNECTED);
 
     if (event == GLFW_CONNECTED)
+    {
         js->connected = GLFW_TRUE;
+
+        // Update the gamepad mapping in case the mappings changed while
+        // the joystick was disconnected
+        js->mapping = findValidMapping(js);
+
+        // Make the current state of the joystick available to the joystick
+        // callback and to any other calls made before the next round of
+        // event processing
+        _glfw.platform.pollJoystick(js, _GLFW_POLL_ALL);
+    }
     else if (event == GLFW_DISCONNECTED)
+    {
         js->connected = GLFW_FALSE;
+
+        // Keep the last known state from driving the application while
+        // the joystick is disconnected
+        memset(js->axes, 0, sizeof(float) * js->axisCount);
+        memset(js->buttons, 0, js->buttonCount + (size_t) js->hatCount * 4);
+        memset(js->hats, 0, js->hatCount);
+    }
 
     if (_glfw.callbacks.joystick)
         _glfw.callbacks.joystick((int) (js - _glfw.joysticks), event);

@@ -5794,6 +5794,12 @@ GLFWAPI int glfwJoystickIsGamepad(int jid);
  *  called by joystick functions.  The function will then return whatever it
  *  returns if the joystick is not present.
  *
+ *  When a joystick is connected, its state is updated and its gamepad mapping
+ *  is selected before the callback is called, so joystick and gamepad input
+ *  functions called from the callback return the current state of the device.
+ *  When a joystick is disconnected, its state is cleared before the callback
+ *  is called.
+ *
  *  @param[in] callback The new callback, or `NULL` to remove the currently set
  *  callback.
  *  @return The previously set callback, or `NULL` if no callback was set or the

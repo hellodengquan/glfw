@@ -5,6 +5,15 @@
 
 ## New features {#features}
 
+#### Joystick state is updated before the connection callback {#joystick_connect_state_36}
+
+When a joystick is connected, its axes, buttons and hats are now polled and its
+gamepad mapping selected before the joystick callback is called, so input
+functions like @ref glfwGetGamepadState return the current state of the device
+both inside and outside the callback.  When a joystick is disconnected, its
+state is cleared before the callback is called, so buttons held at
+disconnection do not keep driving the application.
+
 ## Caveats {#caveats}
 
 ## Deprecations {#deprecations}

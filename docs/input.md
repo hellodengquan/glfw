@@ -742,6 +742,12 @@ functions.  Joystick disconnection may also be detected and the callback
 called by joystick functions.  The function will then return whatever it
 returns for a disconnected joystick.
 
+When a joystick is connected, its state is updated and its gamepad mapping
+selected before the callback is called, so functions like @ref
+glfwGetGamepadState return the current state of the device when called from
+the callback.  When a joystick is disconnected, its state is cleared before
+the callback is called.
+
 Only @ref glfwGetJoystickName and @ref glfwGetJoystickUserPointer will return
 useful values for a disconnected joystick and only before the monitor callback
 returns.
