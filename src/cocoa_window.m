@@ -1978,9 +1978,39 @@ VkResult _glfwCreateWindowSurfaceCocoa(VkInstance instance,
 {
     @autoreleasepool {
 
+    VkResult err;
+    PFN_vkCreateMetalSurfaceEXT vkCreateMetalSurfaceEXT =
+        (PFN_vkCreateMetalSurfaceEXT)
+        vkGetInstanceProcAddr(instance, "vkCreateMetalSurfaceEXT");
+    PFN_vkCreateMacOSSurfaceMVK vkCreateMacOSSurfaceMVK = NULL;
+
+    // NOTE: The extension enumeration performed during initialization only
+    //       reports what the window system makes available and is shared by
+    //       every instance in this process.  Select the surface extension
+    //       based on what the calling instance actually has enabled, as
+    //       different instances may enable different extensions.
+    if (!vkCreateMetalSurfaceEXT)
+    {
+        vkCreateMacOSSurfaceMVK = (PFN_vkCreateMacOSSurfaceMVK)
+            vkGetInstanceProcAddr(instance, "vkCreateMacOSSurfaceMVK");
+        if (!vkCreateMacOSSurfaceMVK)
+        {
+            _glfwInputError(GLFW_API_UNAVAILABLE,
+                            "Cocoa: Vulkan instance missing VK_EXT_metal_surface or VK_MVK_macos_surface extension");
+            return VK_ERROR_EXTENSION_NOT_PRESENT;
+        }
+    }
+
+    // NOTE: Save the view's existing layer state so it can be restored if
+    //       surface creation fails.  Otherwise the presentation layer would
+    //       be left behind on the window, replacing its contents and
+    //       preventing the caller from retrying creation on the same window.
+    id previousLayer = [window->ns.view layer];
+    const BOOL previousWantsLayer = [window->ns.view wantsLayer];
+
     // NOTE: Create the layer here as makeBackingLayer should not return nil
-    window->ns.layer = [CAMetalLayer layer];
-    if (!window->ns.layer)
+    id metalLayer = [CAMetalLayer layer];
+    if (!metalLayer)
     {
         _glfwInputError(GLFW_PLATFORM_ERROR,
                         "Cocoa: Failed to create layer for view");
@@ -1988,27 +2018,15 @@ VkResult _glfwCreateWindowSurfaceCocoa(VkInstance instance,
     }
 
     if (window->ns.scaleFramebuffer)
-        [window->ns.layer setContentsScale:[window->ns.object backingScaleFactor]];
+        [metalLayer setContentsScale:[window->ns.object backingScaleFactor]];
 
-    [window->ns.view setLayer:window->ns.layer];
+    [window->ns.view setLayer:metalLayer];
     [window->ns.view setWantsLayer:YES];
+    window->ns.layer = metalLayer;
 
-    VkResult err;
-
-    if (_glfw.vk.EXT_metal_surface)
+    if (vkCreateMetalSurfaceEXT)
     {
         VkMetalSurfaceCreateInfoEXT sci;
-
-        PFN_vkCreateMetalSurfaceEXT vkCreateMetalSurfaceEXT;
-        vkCreateMetalSurfaceEXT = (PFN_vkCreateMetalSurfaceEXT)
-            vkGetInstanceProcAddr(instance, "vkCreateMetalSurfaceEXT");
-        if (!vkCreateMetalSurfaceEXT)
-        {
-            _glfwInputError(GLFW_API_UNAVAILABLE,
-                            "Cocoa: Vulkan instance missing VK_EXT_metal_surface extension");
-            return VK_ERROR_EXTENSION_NOT_PRESENT;
-        }
-
         memset(&sci, 0, sizeof(sci));
         sci.sType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
         sci.pLayer = window->ns.layer;
@@ -2018,17 +2036,6 @@ VkResult _glfwCreateWindowSurfaceCocoa(VkInstance instance,
     else
     {
         VkMacOSSurfaceCreateInfoMVK sci;
-
-        PFN_vkCreateMacOSSurfaceMVK vkCreateMacOSSurfaceMVK;
-        vkCreateMacOSSurfaceMVK = (PFN_vkCreateMacOSSurfaceMVK)
-            vkGetInstanceProcAddr(instance, "vkCreateMacOSSurfaceMVK");
-        if (!vkCreateMacOSSurfaceMVK)
-        {
-            _glfwInputError(GLFW_API_UNAVAILABLE,
-                            "Cocoa: Vulkan instance missing VK_MVK_macos_surface extension");
-            return VK_ERROR_EXTENSION_NOT_PRESENT;
-        }
-
         memset(&sci, 0, sizeof(sci));
         sci.sType = VK_STRUCTURE_TYPE_MACOS_SURFACE_CREATE_INFO_MVK;
         sci.pView = window->ns.view;
@@ -2041,6 +2048,14 @@ VkResult _glfwCreateWindowSurfaceCocoa(VkInstance instance,
         _glfwInputError(GLFW_PLATFORM_ERROR,
                         "Cocoa: Failed to create Vulkan surface: %s",
                         _glfwGetVulkanResultString(err));
+
+        // NOTE: Restore the window's previous display content so the failed
+        //       presentation layer does not stay attached to it.  The window
+        //       is left in its original state and surface creation may be
+        //       retried on it using another instance.
+        [window->ns.view setLayer:previousLayer];
+        [window->ns.view setWantsLayer:previousWantsLayer];
+        window->ns.layer = previousLayer;
     }
 
     return err;
